@@ -1,0 +1,44 @@
+{
+  "project_id": "of-scheduler-proj",
+  "dataset": "eros_scheduling_brain",
+  "view_name": "schedule_recommendations_messages",
+  "log_table": "schedule_export_log",
+  "spreadsheet_id": "YOUR_SPREADSHEET_ID_HERE",
+  "credentials_path": "path/to/service-account-key.json",
+
+  "export_settings": {
+    "max_retries": 3,
+    "timeout_seconds": 30,
+    "retry_delay_seconds": 5,
+    "duplicate_window_hours": 24
+  },
+
+  "column_mapping": {
+    "schedule_id": "Schedule ID",
+    "page_name": "Creator/Page",
+    "day_of_week": "Day of Week",
+    "scheduled_send_time": "Send Time",
+    "message_type": "Type",
+    "caption_id": "Caption ID",
+    "caption_text": "Caption Text",
+    "price_tier": "Price Tier",
+    "content_category": "Category",
+    "has_urgency": "Has Urgency",
+    "performance_score": "Performance Score"
+  },
+
+  "formatting": {
+    "header_color": "#4285f4",
+    "header_text_color": "#ffffff",
+    "freeze_rows": 1,
+    "auto_resize_columns": true,
+    "apply_banding": true
+  },
+
+  "logging": {
+    "level": "INFO",
+    "log_to_bigquery": true,
+    "log_to_file": false,
+    "log_file_path": "sheets_export.log"
+  }
+}

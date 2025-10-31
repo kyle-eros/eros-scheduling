@@ -1,0 +1,398 @@
+# =============================================================================
+# EROS SCHEDULING SYSTEM - ALERTING CONFIGURATION
+# =============================================================================
+# Project: of-scheduler-proj
+# Dataset: eros_scheduling_brain
+# Purpose: Define alerting rules and notification channels for automation
+# =============================================================================
+
+# Alert channels configuration
+channels:
+  email:
+    enabled: true
+    addresses:
+      - devops@yourcompany.com
+      - scheduling-team@yourcompany.com
+    smtp_server: smtp.yourcompany.com
+    from_address: eros-alerts@yourcompany.com
+
+  slack:
+    enabled: true
+    webhook_url: "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK"
+    channels:
+      critical: "#eros-critical-alerts"
+      warning: "#eros-warnings"
+      info: "#eros-monitoring"
+    mention_on_critical: "@channel"
+
+  pagerduty:
+    enabled: false
+    integration_key: "YOUR_PAGERDUTY_INTEGRATION_KEY"
+    service_name: "EROS Scheduling System"
+
+  google_chat:
+    enabled: false
+    webhook_url: "https://chat.googleapis.com/v1/spaces/YOUR_SPACE/messages"
+
+# Alert rules
+alert_rules:
+  # -------------------------------------------------------------------------
+  # CRITICAL ALERTS - Require immediate action
+  # -------------------------------------------------------------------------
+
+  - name: "daily_automation_failure"
+    severity: "critical"
+    description: "Daily automation orchestrator failed to complete"
+    condition:
+      type: "query"
+      query: |
+        SELECT COUNT(*) AS failure_count
+        FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+        WHERE job_name = 'daily_automation'
+          AND job_status = 'FAILED'
+          AND job_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 2 HOUR)
+      threshold: "failure_count > 0"
+    channels: ["email", "slack", "pagerduty"]
+    notification_template: |
+      🚨 CRITICAL: Daily Automation Failure
+
+      The daily automation orchestrator has failed.
+
+      Time: {{alert_time}}
+      Job Status: FAILED
+
+      Action Required:
+      1. Check error logs in etl_job_runs table
+      2. Review creator_processing_errors for details
+      3. Verify BigQuery scheduled query is running
+      4. Check for infrastructure issues
+
+      Query to investigate:
+      SELECT * FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+      WHERE job_name = 'daily_automation'
+      ORDER BY job_start_time DESC LIMIT 5;
+    cooldown_minutes: 60
+    auto_resolve: false
+
+  - name: "performance_feedback_stale"
+    severity: "critical"
+    description: "Caption performance updates have not run in over 12 hours"
+    condition:
+      type: "query"
+      query: |
+        SELECT TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(last_updated), HOUR) AS hours_stale
+        FROM `of-scheduler-proj.eros_scheduling_brain.caption_bandit_stats`
+      threshold: "hours_stale > 12"
+    channels: ["email", "slack"]
+    notification_template: |
+      🚨 CRITICAL: Performance Feedback Loop Stale
+
+      Caption performance metrics have not been updated in {{hours_stale}} hours.
+
+      Expected: Updates every 6 hours
+      Actual: Last update {{hours_stale}} hours ago
+
+      Action Required:
+      1. Check if update_caption_performance scheduled query is enabled
+      2. Review query execution history for failures
+      3. Verify mass_messages table has recent data
+      4. Check BigQuery quotas and limits
+
+      Manual execution:
+      CALL `of-scheduler-proj.eros_scheduling_brain.update_caption_performance`();
+    cooldown_minutes: 120
+    auto_resolve: true
+
+  - name: "daily_automation_not_run"
+    severity: "critical"
+    description: "Daily automation has not executed in over 28 hours"
+    condition:
+      type: "query"
+      query: |
+        SELECT TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(job_start_time), HOUR) AS hours_since
+        FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+        WHERE job_name = 'daily_automation'
+      threshold: "hours_since > 28"
+    channels: ["email", "slack", "pagerduty"]
+    notification_template: |
+      🚨 CRITICAL: Daily Automation Not Running
+
+      The daily automation has not executed in {{hours_since}} hours.
+
+      Expected: Daily at 3:05 AM America/Los_Angeles
+      Last Run: {{hours_since}} hours ago
+
+      Action Required:
+      1. Verify BigQuery scheduled query is enabled
+      2. Check scheduled query execution history
+      3. Review BigQuery project permissions
+      4. Manually trigger if needed
+
+      Manual trigger:
+      CALL `of-scheduler-proj.eros_scheduling_brain.run_daily_automation`(CURRENT_DATE('America/Los_Angeles'));
+    cooldown_minutes: 180
+    auto_resolve: true
+
+  - name: "lock_table_critical_bloat"
+    severity: "critical"
+    description: "Active caption lock table has exceeded critical threshold"
+    condition:
+      type: "query"
+      query: |
+        SELECT COUNT(*) AS active_lock_count
+        FROM `of-scheduler-proj.eros_scheduling_brain.active_caption_assignments`
+        WHERE is_active = TRUE
+      threshold: "active_lock_count > 10000"
+    channels: ["email", "slack"]
+    notification_template: |
+      🚨 CRITICAL: Lock Table Bloat
+
+      Active caption locks: {{active_lock_count}}
+      Critical Threshold: 10,000
+
+      This indicates either:
+      - Lock cleanup is not running
+      - Scheduling frequency is too aggressive
+      - Locks are not being properly deactivated
+
+      Action Required:
+      1. Check lock cleanup scheduled query status
+      2. Review lock_sweep_log for cleanup failures
+      3. Manually run cleanup if needed
+      4. Investigate scheduling patterns
+
+      Manual cleanup:
+      CALL `of-scheduler-proj.eros_scheduling_brain.sweep_expired_caption_locks`();
+    cooldown_minutes: 60
+    auto_resolve: true
+
+  # -------------------------------------------------------------------------
+  # WARNING ALERTS - Should be investigated but not urgent
+  # -------------------------------------------------------------------------
+
+  - name: "high_creator_failure_rate"
+    severity: "warning"
+    description: "Multiple creators failing during automation"
+    condition:
+      type: "query"
+      query: |
+        SELECT
+          SUM(creators_failed) AS total_failed,
+          SUM(creators_processed) AS total_processed,
+          SAFE_DIVIDE(SUM(creators_failed), SUM(creators_processed)) * 100 AS failure_rate
+        FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+        WHERE job_name = 'daily_automation'
+          AND job_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
+      threshold: "failure_rate > 10"
+    channels: ["slack", "email"]
+    notification_template: |
+      ⚠️ WARNING: High Creator Failure Rate
+
+      Failure Rate: {{failure_rate}}%
+      Failed: {{total_failed}} creators
+      Processed: {{total_processed}} creators
+
+      Investigation Steps:
+      1. Check creator_processing_errors table
+      2. Identify common error patterns
+      3. Review affected creators
+
+      Query:
+      SELECT page_name, error_message, COUNT(*) as error_count
+      FROM `of-scheduler-proj.eros_scheduling_brain.creator_processing_errors`
+      WHERE error_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
+      GROUP BY page_name, error_message
+      ORDER BY error_count DESC;
+    cooldown_minutes: 240
+    auto_resolve: true
+
+  - name: "lock_cleanup_high_volume"
+    severity: "warning"
+    description: "Lock cleanup is removing unusually high number of locks"
+    condition:
+      type: "query"
+      query: |
+        SELECT AVG(total_locks_cleaned) AS avg_cleaned
+        FROM `of-scheduler-proj.eros_scheduling_brain.lock_sweep_log`
+        WHERE sweep_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 6 HOUR)
+      threshold: "avg_cleaned > 100"
+    channels: ["slack"]
+    notification_template: |
+      ⚠️ WARNING: High Lock Cleanup Volume
+
+      Average locks cleaned per sweep: {{avg_cleaned}}
+      Normal threshold: 50
+
+      This may indicate:
+      - Increased scheduling activity (normal)
+      - Missed cleanup cycles catching up
+      - Data quality issues
+
+      Monitor for trends. Investigate if sustained for 24+ hours.
+    cooldown_minutes: 360
+    auto_resolve: true
+
+  - name: "lock_table_warning_bloat"
+    severity: "warning"
+    description: "Active caption lock table approaching warning threshold"
+    condition:
+      type: "query"
+      query: |
+        SELECT COUNT(*) AS active_lock_count
+        FROM `of-scheduler-proj.eros_scheduling_brain.active_caption_assignments`
+        WHERE is_active = TRUE
+      threshold: "active_lock_count > 5000"
+    channels: ["slack"]
+    notification_template: |
+      ⚠️ WARNING: Lock Table Growth
+
+      Active caption locks: {{active_lock_count}}
+      Warning Threshold: 5,000
+      Critical Threshold: 10,000
+
+      Monitor lock growth trends. Consider:
+      - Reviewing cleanup frequency
+      - Checking for stuck locks
+      - Analyzing scheduling patterns
+    cooldown_minutes: 360
+    auto_resolve: true
+
+  - name: "performance_update_warning"
+    severity: "warning"
+    description: "Caption performance updates approaching staleness threshold"
+    condition:
+      type: "query"
+      query: |
+        SELECT TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(last_updated), HOUR) AS hours_stale
+        FROM `of-scheduler-proj.eros_scheduling_brain.caption_bandit_stats`
+      threshold: "hours_stale > 8"
+    channels: ["slack"]
+    notification_template: |
+      ⚠️ WARNING: Performance Updates Delayed
+
+      Last update: {{hours_stale}} hours ago
+      Expected: Every 6 hours
+      Will escalate to CRITICAL at 12 hours
+
+      Monitor the situation. May self-resolve at next scheduled run.
+    cooldown_minutes: 180
+    auto_resolve: true
+
+  - name: "slow_automation_execution"
+    severity: "warning"
+    description: "Daily automation taking longer than normal to execute"
+    condition:
+      type: "query"
+      query: |
+        SELECT
+          AVG(job_duration_seconds) AS avg_duration,
+          MAX(job_duration_seconds) AS max_duration
+        FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+        WHERE job_name = 'daily_automation'
+          AND job_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
+      threshold: "avg_duration > 600"  # 10 minutes
+    channels: ["slack"]
+    notification_template: |
+      ⚠️ WARNING: Slow Automation Execution
+
+      Average Duration: {{avg_duration}} seconds ({{max_duration}} max)
+      Normal: < 600 seconds
+
+      Possible causes:
+      - Increased number of active creators
+      - BigQuery performance issues
+      - Query optimization needed
+
+      Monitor for degradation trends.
+    cooldown_minutes: 480
+    auto_resolve: true
+
+  # -------------------------------------------------------------------------
+  # INFO ALERTS - Informational, no action required
+  # -------------------------------------------------------------------------
+
+  - name: "daily_automation_success"
+    severity: "info"
+    description: "Daily automation completed successfully"
+    condition:
+      type: "query"
+      query: |
+        SELECT COUNT(*) AS success_count
+        FROM `of-scheduler-proj.eros_scheduling_brain.etl_job_runs`
+        WHERE job_name = 'daily_automation'
+          AND job_status = 'SUCCESS'
+          AND job_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)
+      threshold: "success_count > 0"
+    channels: ["slack"]
+    notification_template: |
+      ✅ Daily Automation Completed Successfully
+
+      Job: {{job_id}}
+      Duration: {{duration_seconds}} seconds
+      Creators Processed: {{creators_processed}}
+
+      All systems operating normally.
+    cooldown_minutes: 1440  # Once per day
+    auto_resolve: false
+    enabled: false  # Disable by default to reduce noise
+
+# Notification settings
+notification_settings:
+  # Batch multiple alerts within this window
+  batch_window_minutes: 5
+
+  # Suppress repeat alerts for same condition
+  suppress_duplicates: true
+
+  # Business hours for non-critical alerts (America/Los_Angeles)
+  business_hours:
+    enabled: false  # Set to true to enable
+    start_hour: 9
+    end_hour: 17
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
+  # Escalation policy
+  escalation:
+    enabled: true
+    rules:
+      - severity: "critical"
+        unacknowledged_after_minutes: 30
+        escalate_to: ["pagerduty"]
+      - severity: "warning"
+        unacknowledged_after_minutes: 120
+        escalate_to: ["email"]
+
+# Integration with automation_alerts table
+alerts_table_config:
+  table: "`of-scheduler-proj.eros_scheduling_brain.automation_alerts`"
+  poll_interval_minutes: 5
+  process_unacknowledged_only: true
+  auto_acknowledge_info: true
+
+# =============================================================================
+# IMPLEMENTATION NOTES
+# =============================================================================
+#
+# This configuration defines alerting rules but requires implementation:
+#
+# Option 1: Cloud Monitoring (Recommended)
+#   - Create log-based metrics from automation_alerts table
+#   - Define alert policies based on these metrics
+#   - Configure notification channels in Cloud Monitoring
+#
+# Option 2: Custom Alert Processor
+#   - Build Python/Cloud Function to poll automation_alerts table
+#   - Evaluate conditions and send notifications
+#   - Update acknowledged flag after processing
+#
+# Option 3: Data Studio + Email
+#   - Create Data Studio dashboard with these metrics
+#   - Set up scheduled email reports
+#   - Manual monitoring with dashboard refresh
+#
+# Sample Cloud Function trigger:
+#   - Trigger: Cloud Scheduler (every 5 minutes)
+#   - Function: Read automation_alerts, evaluate rules, send notifications
+#   - Update: Mark alerts as acknowledged
+#
+# =============================================================================

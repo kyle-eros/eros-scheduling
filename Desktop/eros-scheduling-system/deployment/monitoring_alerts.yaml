@@ -1,0 +1,448 @@
+# EROS Scheduling System - Monitoring and Alerting Configuration
+# Google Cloud Monitoring Alert Policies
+
+# This file can be deployed using:
+# gcloud alpha monitoring policies create --policy-from-file=monitoring_alerts.yaml
+
+alerts:
+  # CRITICAL ALERTS
+
+  - name: "EROS - High Query Cost Alert"
+    display_name: "EROS: Daily BigQuery cost exceeds $25"
+    documentation:
+      content: |
+        The daily BigQuery query cost has exceeded the critical threshold of $25.
+
+        ## Impact
+        - Potential runaway queries
+        - Budget overrun risk
+
+        ## Actions
+        1. Check current running queries
+        2. Identify expensive operations
+        3. Cancel if necessary
+        4. Review OPERATIONAL_RUNBOOK.md - Performance Tuning section
+
+        ## Queries
+        ```
+        -- Find expensive queries
+        SELECT job_id, query, total_bytes_billed
+        FROM `region-us`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+        WHERE DATE(creation_time) = CURRENT_DATE()
+        ORDER BY total_bytes_billed DESC LIMIT 10
+        ```
+      mime_type: text/markdown
+    conditions:
+      - display_name: "Daily cost > $25"
+        condition_threshold:
+          filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/bytes_billed"
+          aggregations:
+            - alignment_period: 86400s  # 24 hours
+              per_series_aligner: ALIGN_SUM
+          comparison: COMPARISON_GT
+          threshold_value: 5368709120000  # $25 worth of bytes (5TB)
+          duration: 0s
+    alert_strategy:
+      notification_rate_limit:
+        period: 3600s  # 1 hour
+    notification_channels:
+      - projects/[PROJECT_ID]/notificationChannels/[CHANNEL_ID]
+    severity: CRITICAL
+
+  - name: "EROS - Query Error Rate High"
+    display_name: "EROS: Query error rate exceeds 20%"
+    documentation:
+      content: |
+        Query error rate has exceeded 20% in the last 15 minutes.
+
+        ## Impact
+        - System functionality degraded
+        - Schedule generation may fail
+
+        ## Actions
+        1. Check error logs
+        2. Review recent deployments
+        3. Check BigQuery status
+        4. Consider rollback if recent deploy
+
+        ## Commands
+        ```bash
+        cd deployment
+        bq query < monitor_deployment.sql
+        ./rollback.sh  # If needed
+        ```
+      mime_type: text/markdown
+    conditions:
+      - display_name: "Error rate > 20%"
+        condition_threshold:
+          filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/count"
+            metric.label.error_code != ""
+          aggregations:
+            - alignment_period: 900s  # 15 minutes
+              per_series_aligner: ALIGN_RATE
+          comparison: COMPARISON_GT
+          threshold_value: 0.2
+          duration: 300s  # Sustained for 5 minutes
+    severity: CRITICAL
+
+  - name: "EROS - Duplicate Caption Assignments Detected"
+    display_name: "EROS: Duplicate caption assignments found"
+    documentation:
+      content: |
+        Duplicate caption assignments detected - indicates race condition or logic error.
+
+        ## Impact
+        - Data integrity compromised
+        - Business logic violation
+
+        ## Actions
+        1. IMMEDIATE: Create backup
+        2. Investigate cause
+        3. Clean up duplicates
+        4. Consider rollback
+
+        ## Commands
+        ```bash
+        cd deployment
+        ./backup_tables.sh
+
+        # Check duplicates
+        bq query --use_legacy_sql=false "
+        SELECT caption_id, account_id, COUNT(*) as count
+        FROM \`${EROS_PROJECT_ID}.${EROS_DATASET}.active_caption_assignments\`
+        GROUP BY caption_id, account_id
+        HAVING count > 1"
+        ```
+      mime_type: text/markdown
+    severity: CRITICAL
+
+  # WARNING ALERTS
+
+  - name: "EROS - Query Performance Degraded"
+    display_name: "EROS: Average query time > 30s"
+    documentation:
+      content: |
+        Query performance has degraded beyond acceptable thresholds.
+
+        ## Impact
+        - Slow schedule generation
+        - User experience degraded
+
+        ## Actions
+        1. Identify slow queries
+        2. Check table clustering
+        3. Review query plans
+        4. Consider re-running optimizations
+
+        See: OPERATIONAL_RUNBOOK.md - Performance Tuning
+      mime_type: text/markdown
+    conditions:
+      - display_name: "Avg execution time > 30s"
+        condition_threshold:
+          filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/execution_times"
+          aggregations:
+            - alignment_period: 300s
+              per_series_aligner: ALIGN_MEAN
+          comparison: COMPARISON_GT
+          threshold_value: 30000  # 30 seconds in ms
+          duration: 600s
+    severity: WARNING
+
+  - name: "EROS - Daily Cost Warning"
+    display_name: "EROS: Daily cost exceeds $15"
+    documentation:
+      content: |
+        Daily query cost has exceeded warning threshold.
+
+        ## Actions
+        1. Review query patterns
+        2. Check for table scans
+        3. Verify caching is enabled
+
+        This is a warning - action required within 2 hours.
+      mime_type: text/markdown
+    conditions:
+      - display_name: "Daily cost > $15"
+        condition_threshold:
+          filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/bytes_billed"
+          aggregations:
+            - alignment_period: 86400s
+              per_series_aligner: ALIGN_SUM
+          comparison: COMPARISON_GT
+          threshold_value: 3221225472000  # $15 worth (3TB)
+          duration: 0s
+    severity: WARNING
+
+  - name: "EROS - Expired Locks Detected"
+    display_name: "EROS: Expired caption locks found"
+    documentation:
+      content: |
+        Expired caption locks detected - cleanup needed.
+
+        ## Actions
+        Run cleanup procedure:
+        ```bash
+        bq query --use_legacy_sql=false "
+        DELETE FROM \`${EROS_PROJECT_ID}.${EROS_DATASET}.caption_locks\`
+        WHERE expires_at < CURRENT_TIMESTAMP()"
+        ```
+      mime_type: text/markdown
+    severity: WARNING
+
+  - name: "EROS - Schedule Generation Failures"
+    display_name: "EROS: Multiple schedule generation failures"
+    documentation:
+      content: |
+        Schedule generation is failing for multiple creators.
+
+        ## Actions
+        1. Check creator data quality
+        2. Review caption bank
+        3. Check procedure execution
+        4. Review application logs
+      mime_type: text/markdown
+    severity: WARNING
+
+# Uptime checks
+uptime_checks:
+  - display_name: "EROS BigQuery Dataset Availability"
+    resource:
+      type: "bigquery_project"
+      labels:
+        project_id: "[PROJECT_ID]"
+    check_interval: 300s  # 5 minutes
+    timeout: 10s
+
+# Log-based metrics
+log_metrics:
+  - name: "eros_deployment_events"
+    description: "Count of deployment events"
+    filter: |
+      resource.type = "bigquery_project"
+      jsonPayload.event_type = "DEPLOYMENT"
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: INT64
+      unit: "1"
+
+  - name: "eros_error_count"
+    description: "Count of application errors"
+    filter: |
+      resource.type = "bigquery_project"
+      jsonPayload.level = "ERROR"
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: INT64
+      unit: "1"
+
+  - name: "eros_query_execution_time"
+    description: "Query execution time distribution"
+    filter: |
+      resource.type = "bigquery_project"
+      jsonPayload.duration_ms > 0
+    value_extractor: EXTRACT(jsonPayload.duration_ms)
+    metric_descriptor:
+      metric_kind: DELTA
+      value_type: DISTRIBUTION
+      unit: "ms"
+
+# Dashboards
+dashboards:
+  - display_name: "EROS System Health"
+    dashboard_json: |
+      {
+        "displayName": "EROS System Health Dashboard",
+        "mosaicLayout": {
+          "columns": 12,
+          "tiles": [
+            {
+              "width": 6,
+              "height": 4,
+              "widget": {
+                "title": "Query Execution Time",
+                "xyChart": {
+                  "dataSets": [{
+                    "timeSeriesQuery": {
+                      "timeSeriesFilter": {
+                        "filter": "metric.type=\"bigquery.googleapis.com/query/execution_times\"",
+                        "aggregation": {
+                          "alignmentPeriod": "60s",
+                          "perSeriesAligner": "ALIGN_MEAN"
+                        }
+                      }
+                    }
+                  }],
+                  "timeshiftDuration": "0s",
+                  "yAxis": {
+                    "label": "Execution Time (ms)",
+                    "scale": "LINEAR"
+                  }
+                }
+              }
+            },
+            {
+              "xPos": 6,
+              "width": 6,
+              "height": 4,
+              "widget": {
+                "title": "Query Cost (Daily)",
+                "xyChart": {
+                  "dataSets": [{
+                    "timeSeriesQuery": {
+                      "timeSeriesFilter": {
+                        "filter": "metric.type=\"bigquery.googleapis.com/query/bytes_billed\"",
+                        "aggregation": {
+                          "alignmentPeriod": "86400s",
+                          "perSeriesAligner": "ALIGN_SUM"
+                        }
+                      }
+                    }
+                  }],
+                  "yAxis": {
+                    "label": "Bytes Billed",
+                    "scale": "LINEAR"
+                  }
+                }
+              }
+            },
+            {
+              "yPos": 4,
+              "width": 6,
+              "height": 4,
+              "widget": {
+                "title": "Error Rate",
+                "xyChart": {
+                  "dataSets": [{
+                    "timeSeriesQuery": {
+                      "timeSeriesFilter": {
+                        "filter": "metric.type=\"bigquery.googleapis.com/query/count\" metric.label.error_code!=\"\"",
+                        "aggregation": {
+                          "alignmentPeriod": "300s",
+                          "perSeriesAligner": "ALIGN_RATE"
+                        }
+                      }
+                    }
+                  }],
+                  "yAxis": {
+                    "label": "Errors/sec",
+                    "scale": "LINEAR"
+                  }
+                }
+              }
+            },
+            {
+              "xPos": 6,
+              "yPos": 4,
+              "width": 6,
+              "height": 4,
+              "widget": {
+                "title": "Active Caption Assignments",
+                "scorecard": {
+                  "timeSeriesQuery": {
+                    "timeSeriesFilter": {
+                      "filter": "resource.type=\"bigquery_project\"",
+                      "aggregation": {
+                        "alignmentPeriod": "300s",
+                        "perSeriesAligner": "ALIGN_MEAN"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+
+# Notification channels
+notification_channels:
+  - type: "email"
+    display_name: "DevOps Team Email"
+    labels:
+      email_address: "devops@company.com"
+    enabled: true
+
+  - type: "slack"
+    display_name: "Slack #eros-alerts"
+    labels:
+      channel_name: "#eros-alerts"
+      url: "[SLACK_WEBHOOK_URL]"
+    enabled: true
+
+  - type: "pagerduty"
+    display_name: "PagerDuty - On-Call"
+    labels:
+      service_key: "[PAGERDUTY_SERVICE_KEY]"
+    enabled: true
+    description: "For critical alerts only"
+
+# SLO definitions
+slos:
+  - display_name: "EROS Query Success Rate"
+    goal: 0.99  # 99% success rate
+    rolling_period_days: 7
+    service_level_indicator:
+      request_based:
+        good_total_ratio:
+          good_service_filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/count"
+            metric.label.error_code = ""
+          total_service_filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/count"
+
+  - display_name: "EROS Query Performance"
+    goal: 0.95  # 95% under 30s
+    rolling_period_days: 7
+    service_level_indicator:
+      request_based:
+        good_total_ratio:
+          good_service_filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/execution_times"
+            metric.value < 30000
+          total_service_filter: |
+            resource.type = "bigquery_project"
+            metric.type = "bigquery.googleapis.com/query/execution_times"
+
+# Deployment instructions
+deployment:
+  instructions: |
+    To deploy these monitoring configurations:
+
+    1. Install gcloud alpha components:
+       gcloud components install alpha
+
+    2. Set your project:
+       gcloud config set project YOUR_PROJECT_ID
+
+    3. Create notification channels first:
+       gcloud alpha monitoring channels create \
+         --display-name="DevOps Email" \
+         --type=email \
+         --channel-labels=email_address=devops@company.com
+
+    4. Get channel ID:
+       gcloud alpha monitoring channels list
+
+    5. Update [CHANNEL_ID] placeholders in this file
+
+    6. Deploy alert policies:
+       gcloud alpha monitoring policies create \
+         --policy-from-file=monitoring_alerts.yaml
+
+    7. Create dashboard:
+       gcloud monitoring dashboards create \
+         --config-from-file=dashboard_config.json
+
+    For more details, see:
+    https://cloud.google.com/monitoring/alerts/using-alerting-ui
