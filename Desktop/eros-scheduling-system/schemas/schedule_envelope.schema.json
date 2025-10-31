@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://onlyfans-analytics.com/schemas/schedule_envelope.schema.json",
+  "title": "Schedule Envelope",
+  "description": "Complete schedule output from schedule-builder agent including messages and metadata",
+  "type": "object",
+  "required": ["page_name", "schedule_id", "mm_schedule", "metadata"],
+  "properties": {
+    "page_name": {
+      "type": "string",
+      "description": "Creator page name (normalized: lowercase, no spaces)",
+      "pattern": "^[a-z0-9]+$",
+      "examples": ["jadebri", "carmenrose", "ashleymadison"]
+    },
+    "schedule_id": {
+      "type": "string",
+      "description": "Unique schedule identifier",
+      "pattern": "^schedule_[0-9]{4}-[0-9]{2}-[0-9]{2}_v[0-9]+$",
+      "examples": ["schedule_2025-10-27_v1", "schedule_2025-11-03_v2"]
+    },
+    "mm_schedule": {
+      "type": "array",
+      "description": "Array of scheduled messages (Mass Message type only)",
+      "minItems": 1,
+      "items": {
+        "$ref": "message_row.schema.json"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Schedule intelligence and optimization metadata",
+      "required": [
+        "week_start",
+        "week_end",
+        "account_size",
+        "saturation_status",
+        "volume_summary"
+      ],
+      "properties": {
+        "week_start": {
+          "type": "string",
+          "format": "date",
+          "description": "First day of schedule week (YYYY-MM-DD)",
+          "examples": ["2025-10-27"]
+        },
+        "week_end": {
+          "type": "string",
+          "format": "date",
+          "description": "Last day of schedule week (YYYY-MM-DD)",
+          "examples": ["2025-11-02"]
+        },
+        "account_size": {
+          "type": "string",
+          "enum": ["small", "medium", "large", "very_large"],
+          "description": "Account size tier based on fan count"
+        },
+        "saturation_status": {
+          "type": "string",
+          "enum": ["GREEN", "YELLOW", "RED"],
+          "description": "Audience saturation health status"
+        },
+        "volume_summary": {
+          "type": "object",
+          "required": ["total_messages", "total_ppvs", "total_bumps", "total_followups"],
+          "properties": {
+            "total_messages": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Total messages across all days"
+            },
+            "total_ppvs": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Total PPV unlock messages"
+            },
+            "total_bumps": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total photo bump messages"
+            },
+            "total_followups": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total follow-up messages"
+            }
+          }
+        },
+        "pricing_distribution": {
+          "type": "object",
+          "description": "PPV count by price tier",
+          "properties": {
+            "budget_10_18": {"type": "integer", "minimum": 0},
+            "standard_18_28": {"type": "integer", "minimum": 0},
+            "premium_28_45": {"type": "integer", "minimum": 0},
+            "luxury_45_70": {"type": "integer", "minimum": 0}
+          }
+        },
+        "schedule_quality": {
+          "type": "object",
+          "description": "Quality assessment flags",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["OPTIMAL", "DEGRADED", "CRITICAL"]
+            },
+            "confidence_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

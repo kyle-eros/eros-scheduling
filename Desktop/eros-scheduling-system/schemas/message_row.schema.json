@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://onlyfans-analytics.com/schemas/message_row.schema.json",
+  "title": "Message Row",
+  "description": "Individual scheduled message row in OnlyFans Mass Message schedule",
+  "type": "object",
+  "required": [
+    "row_number",
+    "schedule_type",
+    "message_type",
+    "time_pst",
+    "scheduled_date",
+    "caption",
+    "recommended_price"
+  ],
+  "properties": {
+    "row_number": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Sequential row number (starts at 2 for CSV compatibility with headers)"
+    },
+    "schedule_type": {
+      "type": "string",
+      "const": "Mass Message",
+      "description": "REQUIRED: MUST be 'Mass Message' for ALL rows (no exceptions)"
+    },
+    "message_type": {
+      "type": "string",
+      "enum": ["Unlock", "Follow up", "Photo bump"],
+      "description": "Type of message in the funnel"
+    },
+    "time_pst": {
+      "type": "string",
+      "pattern": "^(1[0-2]|[1-9]):[0-5][0-9] (AM|PM)$",
+      "description": "Scheduled time in PST (H:MM AM/PM format, e.g., '9:07 AM')",
+      "examples": ["9:07 AM", "12:34 PM", "4:38 PM", "11:52 PM"]
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date to send message (YYYY-MM-DD format)",
+      "examples": ["2025-10-27", "2025-11-03"]
+    },
+    "caption": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full message caption text (50-100+ words for PPV, shorter for bumps/follow-ups)"
+    },
+    "recommended_price": {
+      "type": ["string", "null"],
+      "description": "Price recommendation: '$XX' for Unlock, '.' for Photo bump, empty/null for Follow up",
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^\\$[0-9]+$",
+          "description": "Unlock price format (e.g., '$25', '$35')"
+        },
+        {
+          "type": "string",
+          "const": ".",
+          "description": "Photo bump indicator (free content)"
+        },
+        {
+          "type": "string",
+          "maxLength": 0,
+          "description": "Empty string for Follow up messages"
+        },
+        {
+          "type": "null",
+          "description": "Null for Follow up or placeholder bumps"
+        }
+      ]
+    },
+    "caption_id": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Caption ID from caption_bank (required for Unlock/Photo bump from bank, null for Follow ups or generated content)"
+    }
+  }
+}
