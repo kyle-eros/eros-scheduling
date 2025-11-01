@@ -3,7 +3,7 @@
 **Architecture:** Claude Code AI Multi-Agent System
 **Version:** 2.0 (Claude Code Native)
 **Status:** ✅ Production Ready
-**Last Updated:** October 31, 2024
+**Last Updated:** October 31, 2025
 
 ---
 
@@ -111,7 +111,7 @@ The EROS Scheduling System is a **Claude Code AI agent workflow** that uses 5 sp
 Open Claude Code and type:
 ```
 Run the OnlyFans orchestrator for page "jadebri"
-for week starting 2024-11-04 in optimize mode with auto-export
+for week starting 2025-11-03 in optimize mode with auto-export
 ```
 
 That's it! Claude will:
@@ -124,7 +124,7 @@ That's it! Claude will:
 
 ```
 Generate OnlyFans schedules for pages: jadebri, miarodriguez, gracebennett
-Week: 2024-11-04, mode: optimize, auto-export: true, parallel: true
+Week: 2025-11-03, mode: optimize, auto-export: true, parallel: true
 ```
 
 ### Using the Cheatsheet
@@ -449,13 +449,13 @@ with 85 captions needed
         "selected_count": 85
       },
       "schedule": {
-        "schedule_id": "SCH_2024W45_JADEBRI_ABC123",
+        "schedule_id": "SCH_2025W45_JADEBRI_ABC123",
         "total_messages": 42,
         "saturation_zone": "YELLOW"
       },
       "export": {
         "status": "exported",
-        "schedule_id": "SCH_2024W45_JADEBRI_ABC123"
+        "schedule_id": "SCH_2025W45_JADEBRI_ABC123"
       }
     }
   }
@@ -607,6 +607,6 @@ Monday morning:
 ---
 
 **Version:** 2.0
-**Last Updated:** October 31, 2024
+**Last Updated:** October 31, 2025
 **Type:** Claude Code AI Agent Workflow
 **License:** Proprietary
