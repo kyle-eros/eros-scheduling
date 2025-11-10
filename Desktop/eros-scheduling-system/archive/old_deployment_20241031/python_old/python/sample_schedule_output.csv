@@ -1,4 +1,0 @@
-schedule_id,page_name,day_of_week,scheduled_send_time,message_type,caption_id,caption_text,price_tier,content_category,has_urgency,performance_score
-sched_20251031_000000_jadebri,jadebri,Monday,2025-11-04 10:00:00,PPV,12345,Check your DMs 💌,Premium,Tease/Preview,True,0.87
-sched_20251031_000000_jadebri,jadebri,Monday,2025-11-04 13:30:00,Bump,12346,Good afternoon babe 💕,Free,Engagement,False,0.0
-sched_20251031_000000_jadebri,jadebri,Monday,2025-11-04 17:15:00,PPV,12347,Just posted something special... 🔥,Mid,Full Explicit,False,0.72

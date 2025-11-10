@@ -1,0 +1,121 @@
+# EROS Max AI System Configuration
+
+project_id: "of-scheduler-proj"
+dataset_id: "eros_scheduling_brain"
+
+# Agent Configuration
+agents:
+  orchestrator:
+    model: "claude-sonnet-4-5-20250929"
+    max_tokens: 8000
+    temperature: 0.7
+
+  specialized:
+    model: "claude-sonnet-4-5-20250929"
+    max_tokens: 4000
+    temperature: 0.5
+
+# Analytics Configuration
+analytics:
+  lookback_days: 90
+  min_messages_threshold: 100
+  min_sent_count: 50
+  cache_ttl_hours: 2
+
+  # Exponential decay half-life (days)
+  decay_half_life:
+    growing: 14
+    stable: 18
+    declining: 21
+
+# Schedule Generation
+scheduling:
+  volume:
+    min_weekly: 2
+    max_weekly: 15
+    default_daily: 9
+
+  content_mix:
+    ppv_ratio: 0.60
+    engagement_ratio: 0.40
+
+  spacing:
+    min_hours: 3
+    randomize_minutes: true
+
+  day_of_week_multipliers:
+    monday: 0.9
+    tuesday: 1.0
+    wednesday: 1.0
+    thursday: 1.1
+    friday: 1.2
+    saturday: 1.1
+    sunday: 1.0
+
+# Caption Selection
+caption_selection:
+  min_freshness_days: 30
+  min_performance_score: 40
+  validation_levels:
+    - medium
+    - high
+
+  diversity:
+    max_same_category_per_day: 3
+    min_price_tier_variety: 2
+
+# Batch Processing
+batch_processing:
+  max_workers: 10
+  retry_attempts: 2
+  timeout_seconds: 120
+
+# Validation Rules
+validation:
+  vault_matrix:
+    enforce_strict: true
+    reject_on_violation: true
+
+  pricing:
+    min_price: 5.0
+    max_price: 100.0
+
+  eros_score:
+    target: 70
+    warning_threshold: 50
+    critical_threshold: 30
+
+# Export Settings
+export:
+  output_directory: "./output"
+  csv_format:
+    include_summary: true
+    include_confidence: true
+
+  report_format: "text"
+
+# Monitoring & Alerts
+monitoring:
+  enable_alerts: true
+  alert_channels:
+    - email
+    - slack
+
+  thresholds:
+    revenue_drop_pct: 30
+    execution_rate_min: 80
+    prediction_error_max: 40
+
+# Feature Flags
+features:
+  enable_ml_predictions: true
+  enable_energy_matching: true
+  enable_parallel_processing: true
+  enable_caching: true
+  enable_real_time_monitoring: false  # Future enhancement
+
+# Logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/eros_system.log"
